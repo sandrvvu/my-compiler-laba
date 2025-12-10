@@ -1,14 +1,12 @@
 // main.ts
 import * as readline from 'readline';
 import { ArithmeticExpressionAnalyzer } from './analyzer';
+import { EquivalentExpressionGenerator, runLab3Interactive, runLab4Interactive } from './lab34';
 import { ParallelExpressionAnalyzer, runLab2Interactive } from './lab2';
-import { CommutativeTransformer, runLab3Interactive } from './lab3';
-import { DistributiveTransformer, runLab4Interactive } from './lab4';
 
 const analyzer = new ArithmeticExpressionAnalyzer();
 const parallelAnalyzer = new ParallelExpressionAnalyzer();
-const commutativeTransformer = new CommutativeTransformer();
-const distributiveTransformer = new DistributiveTransformer();
+const equivalentsGenerator = new EquivalentExpressionGenerator();
 
 const testExpressions = [
   // Правильні вирази
@@ -107,7 +105,7 @@ function runTests(): void {
 }
 
 function parseLabChoice(args: string[]): { lab: 1 | 2 | 3 | 4; rest: string[]; runTests: boolean } {
-  let lab: 1 | 2 | 3 | 4 = 1;
+  let lab: 1 | 2 | 3 | 4 = 3;
   let runTests = false;
   const rest: string[] = [];
   let skipNext = false;
@@ -195,7 +193,10 @@ function runLab3(expressionArgs: string[]): void {
         return;
       }
 
-      commutativeTransformer.generate(expression);
+      const { original, variants } = equivalentsGenerator.generateCommutativeForms(expression);
+      console.log(`\nПочаткова форма: ${original}`);
+      console.log('Еквівалентні форми (комутативний закон):');
+      variants.forEach((variant, index) => console.log(`  ${index + 1}. ${variant}`));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Невідома помилка';
       console.error(`Помилка: ${message}`);
@@ -216,7 +217,11 @@ function runLab4(expressionArgs: string[]): void {
         return;
       }
 
-      distributiveTransformer.generate(expression);
+      const { original, distributed, variants } = equivalentsGenerator.generateDistributiveForms(expression);
+      console.log(`\nПочаткова форма: ${original}`);
+      console.log(`Після застосування дистрибутивності: ${distributed}`);
+      console.log('Еквівалентні форми (дистрибутивний та комутативний закони):');
+      variants.forEach((variant, index) => console.log(`  ${index + 1}. ${variant}`));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Невідома помилка';
       console.error(`Помилка: ${message}`);
@@ -226,6 +231,7 @@ function runLab4(expressionArgs: string[]): void {
 
   runLab4Interactive();
 }
+
 
 function main(): void {
   const args = process.argv.slice(2);
