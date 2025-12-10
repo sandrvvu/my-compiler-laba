@@ -3,6 +3,7 @@ import * as readline from 'readline';
 import { ArithmeticExpressionAnalyzer } from './analyzer';
 import { EquivalentExpressionGenerator, runLab3Interactive, runLab4Interactive } from './lab34';
 import { ParallelExpressionAnalyzer, runLab2Interactive } from './lab2';
+import { runLab5Interactive, runLab5Once } from './lab5';
 
 const analyzer = new ArithmeticExpressionAnalyzer();
 const parallelAnalyzer = new ParallelExpressionAnalyzer();
@@ -104,8 +105,8 @@ function runTests(): void {
   analyzer.analyzeMultiple(testExpressions);
 }
 
-function parseLabChoice(args: string[]): { lab: 1 | 2 | 3 | 4; rest: string[]; runTests: boolean } {
-  let lab: 1 | 2 | 3 | 4 = 3;
+function parseLabChoice(args: string[]): { lab: 1 | 2 | 3 | 4 | 5; rest: string[]; runTests: boolean } {
+  let lab: 1 | 2 | 3 | 4 | 5 = 3;
   let runTests = false;
   const rest: string[] = [];
   let skipNext = false;
@@ -116,9 +117,9 @@ function parseLabChoice(args: string[]): { lab: 1 | 2 | 3 | 4; rest: string[]; r
       return;
     }
 
-    const match = arg.match(/^--lab=?([1-4])$/);
+    const match = arg.match(/^--lab=?([1-5])$/);
     if (match) {
-      lab = Number(match[1]) as 1 | 2 | 3 | 4;
+      lab = Number(match[1]) as 1 | 2 | 3 | 4 | 5;
       return;
     }
 
@@ -142,9 +143,14 @@ function parseLabChoice(args: string[]): { lab: 1 | 2 | 3 | 4; rest: string[]; r
       return;
     }
 
+    if (arg === '--lab5') {
+      lab = 5;
+      return;
+    }
+
     if ((arg === '--lab' || arg === '-l') && args[index + 1]) {
       const nextValue = Number(args[index + 1]);
-      lab = nextValue === 2 ? 2 : nextValue === 3 ? 3 : nextValue === 4 ? 4 : 1;
+      lab = nextValue === 2 ? 2 : nextValue === 3 ? 3 : nextValue === 4 ? 4 : nextValue === 5 ? 5 : 1;
       skipNext = true;
       return;
     }
@@ -232,6 +238,27 @@ function runLab4(expressionArgs: string[]): void {
   runLab4Interactive();
 }
 
+function runLab5(expressionArgs: string[]): void {
+  if (expressionArgs.length > 0) {
+    const expression = expressionArgs.join(' ');
+    try {
+      const validation = analyzer.analyze(expression);
+      if (!validation.isValid) {
+        console.error('\nВираз не пройшов перевірку лабораторної №1. Моделювання не виконано.');
+        return;
+      }
+
+      runLab5Once(expression);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Невідома помилка';
+      console.error(`Помилка: ${message}`);
+    }
+    return;
+  }
+
+  runLab5Interactive();
+}
+
 
 function main(): void {
   const args = process.argv.slice(2);
@@ -249,6 +276,11 @@ function main(): void {
 
   if (lab === 4) {
     runLab4(rest);
+    return;
+  }
+
+  if (lab === 5) {
+    runLab5(rest);
     return;
   }
 
