@@ -10,6 +10,8 @@
     "dev": "ts-node main.ts",
     "lab1": "npm run build && node dist/main.js --lab 1",
     "lab2": "npm run build && node dist/main.js --lab 2",
+    "lab3": "npm run build && node dist/main.js --lab 3",
+    "lab4": "npm run build && node dist/main.js --lab 4",
     "clean": "rm -rf dist"
   },
   "keywords": [

@@ -2,9 +2,13 @@
 import * as readline from 'readline';
 import { ArithmeticExpressionAnalyzer } from './analyzer';
 import { ParallelExpressionAnalyzer, runLab2Interactive } from './lab2';
+import { CommutativeTransformer, runLab3Interactive } from './lab3';
+import { DistributiveTransformer, runLab4Interactive } from './lab4';
 
 const analyzer = new ArithmeticExpressionAnalyzer();
 const parallelAnalyzer = new ParallelExpressionAnalyzer();
+const commutativeTransformer = new CommutativeTransformer();
+const distributiveTransformer = new DistributiveTransformer();
 
 const testExpressions = [
   // Правильні вирази
@@ -102,8 +106,8 @@ function runTests(): void {
   analyzer.analyzeMultiple(testExpressions);
 }
 
-function parseLabChoice(args: string[]): { lab: 1 | 2; rest: string[]; runTests: boolean } {
-  let lab: 1 | 2 = 1;
+function parseLabChoice(args: string[]): { lab: 1 | 2 | 3 | 4; rest: string[]; runTests: boolean } {
+  let lab: 1 | 2 | 3 | 4 = 1;
   let runTests = false;
   const rest: string[] = [];
   let skipNext = false;
@@ -114,18 +118,35 @@ function parseLabChoice(args: string[]): { lab: 1 | 2; rest: string[]; runTests:
       return;
     }
 
-    if (arg === '--lab2' || arg === '--lab=2') {
-      lab = 2;
+    const match = arg.match(/^--lab=?([1-4])$/);
+    if (match) {
+      lab = Number(match[1]) as 1 | 2 | 3 | 4;
       return;
     }
 
-    if (arg === '--lab1' || arg === '--lab=1') {
+    if (arg === '--lab1') {
       lab = 1;
       return;
     }
 
+    if (arg === '--lab2') {
+      lab = 2;
+      return;
+    }
+
+    if (arg === '--lab3') {
+      lab = 3;
+      return;
+    }
+
+    if (arg === '--lab4') {
+      lab = 4;
+      return;
+    }
+
     if ((arg === '--lab' || arg === '-l') && args[index + 1]) {
-      lab = args[index + 1] === '2' ? 2 : 1;
+      const nextValue = Number(args[index + 1]);
+      lab = nextValue === 2 ? 2 : nextValue === 3 ? 3 : nextValue === 4 ? 4 : 1;
       skipNext = true;
       return;
     }
@@ -164,12 +185,64 @@ function runLab2(expressionArgs: string[]): void {
   runLab2Interactive();
 }
 
+function runLab3(expressionArgs: string[]): void {
+  if (expressionArgs.length > 0) {
+    const expression = expressionArgs.join(' ');
+    try {
+      const validation = analyzer.analyze(expression);
+      if (!validation.isValid) {
+        console.error('\nВираз не пройшов перевірку лабораторної №1. Перетворення не виконано.');
+        return;
+      }
+
+      commutativeTransformer.generate(expression);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Невідома помилка';
+      console.error(`Помилка: ${message}`);
+    }
+    return;
+  }
+
+  runLab3Interactive();
+}
+
+function runLab4(expressionArgs: string[]): void {
+  if (expressionArgs.length > 0) {
+    const expression = expressionArgs.join(' ');
+    try {
+      const validation = analyzer.analyze(expression);
+      if (!validation.isValid) {
+        console.error('\nВираз не пройшов перевірку лабораторної №1. Перетворення не виконано.');
+        return;
+      }
+
+      distributiveTransformer.generate(expression);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Невідома помилка';
+      console.error(`Помилка: ${message}`);
+    }
+    return;
+  }
+
+  runLab4Interactive();
+}
+
 function main(): void {
   const args = process.argv.slice(2);
   const { lab, rest, runTests: shouldRunTests } = parseLabChoice(args);
 
   if (lab === 2) {
     runLab2(rest);
+    return;
+  }
+
+  if (lab === 3) {
+    runLab3(rest);
+    return;
+  }
+
+  if (lab === 4) {
+    runLab4(rest);
     return;
   }
 
