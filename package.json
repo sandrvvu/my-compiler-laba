@@ -8,6 +8,8 @@
     "start": "npm run build && node dist/main.js",
     "test": "npm run build && node dist/main.js --test",
     "dev": "ts-node main.ts",
+    "lab1": "npm run build && node dist/main.js --lab 1",
+    "lab2": "npm run build && node dist/main.js --lab 2",
     "clean": "rm -rf dist"
   },
   "keywords": [

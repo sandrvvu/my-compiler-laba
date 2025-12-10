@@ -1,8 +1,10 @@
 // main.ts
 import * as readline from 'readline';
 import { ArithmeticExpressionAnalyzer } from './analyzer';
+import { ParallelExpressionAnalyzer, runLab2Interactive } from './lab2';
 
 const analyzer = new ArithmeticExpressionAnalyzer();
+const parallelAnalyzer = new ParallelExpressionAnalyzer();
 
 const testExpressions = [
   // Правильні вирази
@@ -64,7 +66,7 @@ const testExpressions = [
   "2 # 3",            // недійсний символ
 ];
 
-function runInteractiveMode(): void {
+function runInteractiveModeLab1(): void {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
@@ -100,21 +102,89 @@ function runTests(): void {
   analyzer.analyzeMultiple(testExpressions);
 }
 
+function parseLabChoice(args: string[]): { lab: 1 | 2; rest: string[]; runTests: boolean } {
+  let lab: 1 | 2 = 1;
+  let runTests = false;
+  const rest: string[] = [];
+  let skipNext = false;
+
+  args.forEach((arg, index) => {
+    if (skipNext) {
+      skipNext = false;
+      return;
+    }
+
+    if (arg === '--lab2' || arg === '--lab=2') {
+      lab = 2;
+      return;
+    }
+
+    if (arg === '--lab1' || arg === '--lab=1') {
+      lab = 1;
+      return;
+    }
+
+    if ((arg === '--lab' || arg === '-l') && args[index + 1]) {
+      lab = args[index + 1] === '2' ? 2 : 1;
+      skipNext = true;
+      return;
+    }
+
+    if (arg === '--test' || arg === '-t') {
+      runTests = true;
+      return;
+    }
+
+    if (!arg.startsWith('--lab=')) {
+      rest.push(arg);
+    }
+  });
+
+  return { lab, rest, runTests };
+}
+
+function runLab2(expressionArgs: string[]): void {
+  if (expressionArgs.length > 0) {
+    const expression = expressionArgs.join(' ');
+    try {
+      const validation = analyzer.analyze(expression);
+      if (!validation.isValid) {
+        console.error('\nВираз не пройшов перевірку лабораторної №1. Розпаралелювання не виконано.');
+        return;
+      }
+
+      parallelAnalyzer.analyze(expression);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Невідома помилка';
+      console.error(`Помилка: ${message}`);
+    }
+    return;
+  }
+
+  runLab2Interactive();
+}
+
 function main(): void {
   const args = process.argv.slice(2);
+  const { lab, rest, runTests: shouldRunTests } = parseLabChoice(args);
 
-  if (args.includes('--test') || args.includes('-t')) {
+  if (lab === 2) {
+    runLab2(rest);
+    return;
+  }
+
+  if (shouldRunTests) {
     runTests();
     return;
   }
 
-  if (args.length > 0) {
-    const expression = args.join(' ');
+  if (rest.length > 0) {
+    const expression = rest.join(' ');
     analyzer.analyze(expression);
     return;
   }
 
-  runInteractiveMode();
+  runInteractiveModeLab1();
 }
 
 if (require.main === module) {
