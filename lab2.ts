@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import * as readline from 'readline';
 import { ArithmeticExpressionAnalyzer } from './analyzer';
+import { renderParallelTree } from './treeVisualizer';
 
 export type NodeType = 'OPERAND' | 'BINARY_OP';
 
@@ -46,9 +47,12 @@ export class ParallelExpressionAnalyzer {
     console.log('\nТокени:', tokens.map((t) => t.value).join(' '));
 
     const ast = this.parseExpression(tokens);
+    const originalTree = this.cloneNode(ast);
     const { tree, log } = this.optimizeTree(ast);
     const stats = this.calculateTreeLevels(tree);
 
+    this.printTree('Початкове дерево', originalTree);
+    this.printTree('Оптимізоване дерево', tree);
     this.printOptimizations(log);
     this.printStats(stats);
 
@@ -122,6 +126,7 @@ export class ParallelExpressionAnalyzer {
       return left;
     };
 
+    
     const parseMultiplicative = (): ParallelNode => {
       let left = parseUnary();
 
@@ -180,6 +185,27 @@ export class ParallelExpressionAnalyzer {
     }
 
     return ast;
+  }
+
+  private cloneNode(node: ParallelNode | undefined): ParallelNode {
+    if (!node) {
+      throw new Error('Неможливо клонувати порожній вузол');
+    }
+
+    if (node.type === 'OPERAND') {
+      return { ...node };
+    }
+
+    return {
+      ...node,
+      left: node.left ? this.cloneNode(node.left) : undefined,
+      right: node.right ? this.cloneNode(node.right) : undefined,
+    };
+  }
+
+  private printTree(title: string, root: ParallelNode): void {
+    console.log(`\n${title}:`);
+    console.log(renderParallelTree(root));
   }
 
   private optimizeTree(node: ParallelNode): { tree: ParallelNode; log: OptimizationRecord[] } {
