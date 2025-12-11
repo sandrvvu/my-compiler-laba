@@ -1,4 +1,3 @@
-// parser.ts
 import { Token, TokenType, AnalysisError, State } from "./types";
 
 export class Parser {
@@ -56,7 +55,6 @@ export class Parser {
         this.addError(`Вираз не може починатися з оператора '${token.value}'`);
         return;
       }
-      // Унарні оператори + і -
       if (token.value === "+" || token.value === "-") {
         this.state = State.EXPECT_OPERAND;
         this.advance();
@@ -113,7 +111,6 @@ export class Parser {
 
     if (token.type === TokenType.LEFT_PAREN) {
       this.parenStack.push(token.position);
-      // Залишаємося в стані EXPECT_OPERAND для вмісту дужок
       this.advance();
       return;
     }
@@ -122,7 +119,6 @@ export class Parser {
       token.type === TokenType.OPERATOR &&
       (token.value === "+" || token.value === "-")
     ) {
-      // Унарні оператори - залишаємося в стані EXPECT_OPERAND
       this.advance();
       return;
     }
@@ -149,7 +145,7 @@ export class Parser {
         this.addError("Зайва закрита дужка");
         return;
       }
-      // Перевірка на пусті дужки
+
       const prevToken = this.tokens[this.currentIndex - 1];
       if (prevToken && prevToken.type === TokenType.LEFT_PAREN) {
         this.addError("Пусті дужки не дозволені");
@@ -166,7 +162,6 @@ export class Parser {
     const token = this.currentToken;
 
     if (token.type === TokenType.EOF) {
-      // Кінець виразу після операнда - це нормально
       return;
     }
 
@@ -182,7 +177,6 @@ export class Parser {
         return;
       }
       this.parenStack.pop();
-      // Залишаємося в стані EXPECT_OPERATOR
       this.advance();
       return;
     }
@@ -215,7 +209,6 @@ export class Parser {
       return;
     }
 
-    // Функція без дужки
     const prevToken = this.tokens[this.currentIndex - 1];
     if (prevToken && prevToken.type === TokenType.FUNCTION) {
       this.addError(
@@ -230,16 +223,14 @@ export class Parser {
   }
 
   private processErrorState(): void {
-    // В стані помилки просто пропускаємо токени до кінця
     while (this.currentToken.type !== TokenType.EOF) {
       this.advance();
     }
   }
 
   private validateFinalState(): void {
-    // Перевірка кінцевого стану
     if (this.state === State.EXPECT_OPERAND) {
-      const lastRealToken = this.tokens[this.tokens.length - 2]; // -2 тому що останній це EOF
+      const lastRealToken = this.tokens[this.tokens.length - 2];
       if (lastRealToken) {
         if (lastRealToken.type === TokenType.OPERATOR) {
           this.addError(
@@ -260,7 +251,6 @@ export class Parser {
       }
     }
 
-    // Перевірка незакритих дужок
     if (this.parenStack.length > 0) {
       this.addError(
         "Незакрита дужка",
@@ -268,7 +258,6 @@ export class Parser {
       );
     }
 
-    // Перевірка недійсних токенів
     for (const token of this.tokens) {
       if (token.type === TokenType.INVALID) {
         this.addError(`Недійсний токен: '${token.value}'`, token.position);
@@ -283,14 +272,12 @@ export class Parser {
 
       if (next.type === TokenType.EOF) break;
 
-      // Перевірка подвійних операторів
       if (
         current.type === TokenType.OPERATOR &&
         next.type === TokenType.OPERATOR
       ) {
         const allowedUnary = ["+", "-"];
 
-        // Якщо другий оператор не унарний — помилка
         if (!allowedUnary.includes(next.value)) {
           this.addError(
             `Подвійні оператори: '${current.value}${next.value}'`,
@@ -298,7 +285,6 @@ export class Parser {
           );
         }
 
-        // Якщо ++ або -- → теж помилка
         if (current.value === next.value && allowedUnary.includes(next.value)) {
           this.addError(
             `Некоректна послідовність операторів: '${current.value}${next.value}'`,
@@ -307,7 +293,6 @@ export class Parser {
         }
       }
 
-      // Відсутній оператор після дужки (наприклад, ")2" або ")x")
       if (
         current.type === TokenType.RIGHT_PAREN &&
         (next.type === TokenType.NUMBER ||
@@ -325,7 +310,6 @@ export class Parser {
       return false;
     }
 
-    // Головний цикл кінцевого автомата
     while (
       this.currentToken.type !== TokenType.EOF &&
       this.state !== State.ERROR
@@ -348,7 +332,6 @@ export class Parser {
       }
     }
 
-    // Перевірка кінцевого стану та додаткових правил
     if (this.state !== State.ERROR) {
       this.validateFinalState();
       this.validateAdditionalRules();

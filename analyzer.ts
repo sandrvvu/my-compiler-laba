@@ -1,4 +1,3 @@
-// analyzer.ts
 import { Lexer } from "./lexer";
 import { Parser } from "./parser";
 import { AnalysisResult, AnalysisError, TokenType } from "./types";
@@ -7,7 +6,6 @@ export class ArithmeticExpressionAnalyzer {
   public analyze(expression: string): AnalysisResult {
     console.log(`\n=== Аналіз виразу: "${expression}" ===`);
 
-    // Лексичний аналіз
     console.log("\n1. ЛЕКСИЧНИЙ АНАЛІЗ:");
     const lexer = new Lexer(expression);
     const tokens = lexer.tokenize();
@@ -33,7 +31,6 @@ export class ArithmeticExpressionAnalyzer {
       console.log("\nЛексичних помилок не знайдено.");
     }
 
-    // Синтаксичний аналіз
     console.log("\n2. СИНТАКСИЧНИЙ АНАЛІЗ:");
     const parser = new Parser(tokens);
     const isValid = parser.parse();
@@ -50,7 +47,6 @@ export class ArithmeticExpressionAnalyzer {
       console.log("Синтаксичних помилок не знайдено.");
     }
 
-    // Об'єднання всіх помилок
     const allErrors: AnalysisError[] = [...lexicalErrors, ...syntacticErrors];
     const overallValid = allErrors.length === 0;
 

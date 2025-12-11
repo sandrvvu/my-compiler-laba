@@ -1,4 +1,3 @@
-// types.ts
 export enum TokenType {
   NUMBER = "NUMBER",
   VARIABLE = "VARIABLE",

@@ -105,7 +105,7 @@ function runTests(): void {
 }
 
 function parseLabChoice(args: string[]): { lab: 1 | 2 | 3 | 4; rest: string[]; runTests: boolean } {
-  let lab: 1 | 2 | 3 | 4 = 3;
+  let lab: 1 | 2 | 3 | 4 = 1;
   let runTests = false;
   const rest: string[] = [];
   let skipNext = false;
