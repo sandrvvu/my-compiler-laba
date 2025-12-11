@@ -1,5 +1,11 @@
 {
   "compilerOptions": {
-    "types": ["node"]
+    "types": ["node"],
+    "outDir": "dist",
+    "rootDir": "./",
+    "target": "ES2019",
+    "module": "commonjs",
+    "strict": true,
+    "esModuleInterop": true
   }
 }

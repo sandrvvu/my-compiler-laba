@@ -1,8 +1,12 @@
 // main.ts
 import * as readline from 'readline';
 import { ArithmeticExpressionAnalyzer } from './analyzer';
+import { EquivalentExpressionGenerator, runLab3Interactive, runLab4Interactive } from './lab34';
+import { ParallelExpressionAnalyzer, runLab2Interactive } from './lab2';
 
 const analyzer = new ArithmeticExpressionAnalyzer();
+const parallelAnalyzer = new ParallelExpressionAnalyzer();
+const equivalentsGenerator = new EquivalentExpressionGenerator();
 
 const testExpressions = [
   // Правильні вирази
@@ -64,7 +68,7 @@ const testExpressions = [
   "2 # 3",            // недійсний символ
 ];
 
-function runInteractiveMode(): void {
+function runInteractiveModeLab1(): void {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
@@ -100,21 +104,166 @@ function runTests(): void {
   analyzer.analyzeMultiple(testExpressions);
 }
 
+function parseLabChoice(args: string[]): { lab: 1 | 2 | 3 | 4; rest: string[]; runTests: boolean } {
+  let lab: 1 | 2 | 3 | 4 = 3;
+  let runTests = false;
+  const rest: string[] = [];
+  let skipNext = false;
+
+  args.forEach((arg, index) => {
+    if (skipNext) {
+      skipNext = false;
+      return;
+    }
+
+    const match = arg.match(/^--lab=?([1-4])$/);
+    if (match) {
+      lab = Number(match[1]) as 1 | 2 | 3 | 4;
+      return;
+    }
+
+    if (arg === '--lab1') {
+      lab = 1;
+      return;
+    }
+
+    if (arg === '--lab2') {
+      lab = 2;
+      return;
+    }
+
+    if (arg === '--lab3') {
+      lab = 3;
+      return;
+    }
+
+    if (arg === '--lab4') {
+      lab = 4;
+      return;
+    }
+
+    if ((arg === '--lab' || arg === '-l') && args[index + 1]) {
+      const nextValue = Number(args[index + 1]);
+      lab = nextValue === 2 ? 2 : nextValue === 3 ? 3 : nextValue === 4 ? 4 : 1;
+      skipNext = true;
+      return;
+    }
+
+    if (arg === '--test' || arg === '-t') {
+      runTests = true;
+      return;
+    }
+
+    if (!arg.startsWith('--lab=')) {
+      rest.push(arg);
+    }
+  });
+
+  return { lab, rest, runTests };
+}
+
+function runLab2(expressionArgs: string[]): void {
+  if (expressionArgs.length > 0) {
+    const expression = expressionArgs.join(' ');
+    try {
+      const validation = analyzer.analyze(expression);
+      if (!validation.isValid) {
+        console.error('\nВираз не пройшов перевірку лабораторної №1. Розпаралелювання не виконано.');
+        return;
+      }
+
+      parallelAnalyzer.analyze(expression);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Невідома помилка';
+      console.error(`Помилка: ${message}`);
+    }
+    return;
+  }
+
+  runLab2Interactive();
+}
+
+function runLab3(expressionArgs: string[]): void {
+  if (expressionArgs.length > 0) {
+    const expression = expressionArgs.join(' ');
+    try {
+      const validation = analyzer.analyze(expression);
+      if (!validation.isValid) {
+        console.error('\nВираз не пройшов перевірку лабораторної №1. Перетворення не виконано.');
+        return;
+      }
+
+      const { original, variants } = equivalentsGenerator.generateCommutativeForms(expression);
+      console.log(`\nПочаткова форма: ${original}`);
+      console.log('Еквівалентні форми (комутативний закон):');
+      variants.forEach((variant, index) => console.log(`  ${index + 1}. ${variant}`));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Невідома помилка';
+      console.error(`Помилка: ${message}`);
+    }
+    return;
+  }
+
+  runLab3Interactive();
+}
+
+function runLab4(expressionArgs: string[]): void {
+  if (expressionArgs.length > 0) {
+    const expression = expressionArgs.join(' ');
+    try {
+      const validation = analyzer.analyze(expression);
+      if (!validation.isValid) {
+        console.error('\nВираз не пройшов перевірку лабораторної №1. Перетворення не виконано.');
+        return;
+      }
+
+      const { original, distributed, variants } = equivalentsGenerator.generateDistributiveForms(expression);
+      console.log(`\nПочаткова форма: ${original}`);
+      console.log(`Після застосування дистрибутивності: ${distributed}`);
+      console.log('Еквівалентні форми (дистрибутивний та комутативний закони):');
+      variants.forEach((variant, index) => console.log(`  ${index + 1}. ${variant}`));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Невідома помилка';
+      console.error(`Помилка: ${message}`);
+    }
+    return;
+  }
+
+  runLab4Interactive();
+}
+
+
 function main(): void {
   const args = process.argv.slice(2);
+  const { lab, rest, runTests: shouldRunTests } = parseLabChoice(args);
 
-  if (args.includes('--test') || args.includes('-t')) {
+  if (lab === 2) {
+    runLab2(rest);
+    return;
+  }
+
+  if (lab === 3) {
+    runLab3(rest);
+    return;
+  }
+
+  if (lab === 4) {
+    runLab4(rest);
+    return;
+  }
+
+  if (shouldRunTests) {
     runTests();
     return;
   }
 
-  if (args.length > 0) {
-    const expression = args.join(' ');
+  if (rest.length > 0) {
+    const expression = rest.join(' ');
     analyzer.analyze(expression);
     return;
   }
 
-  runInteractiveMode();
+  runInteractiveModeLab1();
 }
 
 if (require.main === module) {
