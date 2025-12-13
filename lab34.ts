@@ -28,6 +28,19 @@ export interface EquivalentFormsResult {
   variants: string[];
 }
 
+export const VARIANT_DISPLAY_LIMIT = 50;
+
+export function printVariants(variants: string[], limit: number = VARIANT_DISPLAY_LIMIT): void {
+  const total = variants.length;
+  const capped = variants.slice(0, limit);
+
+  capped.forEach((variant, index) => console.log(`  ${index + 1}. ${variant}`));
+
+  if (total > limit) {
+    console.log(`  ... (показано ${limit} з ${total} форм)`);
+  }
+}
+
 export class EquivalentExpressionGenerator {
   public generateCommutativeForms(expression: string): EquivalentFormsResult {
     const ast = this.parseExpression(this.tokenize(expression));
@@ -450,7 +463,7 @@ export function runLab3Interactive(): void {
       const { original, variants } = generator.generateCommutativeForms(expression);
       console.log(`\nПочаткова форма: ${original}`);
       console.log('Еквівалентні форми (комутативність):');
-      variants.forEach((variant, index) => console.log(`  ${index + 1}. ${variant}`));
+      printVariants(variants);
 
       ask();
     });
@@ -489,7 +502,7 @@ export function runLab4Interactive(): void {
       console.log(`\nПочаткова форма: ${original}`);
       console.log(`Після застосування дистрибутивності: ${distributed}`);
       console.log('Еквівалентні форми (комбінації дистрибутивності та комутативності):');
-      variants.forEach((variant, index) => console.log(`  ${index + 1}. ${variant}`));
+      printVariants(variants);
 
       ask();
     });

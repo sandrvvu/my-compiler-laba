@@ -222,12 +222,6 @@ export class Parser {
     );
   }
 
-  private processErrorState(): void {
-    while (this.currentToken.type !== TokenType.EOF) {
-      this.advance();
-    }
-  }
-
   private validateFinalState(): void {
     if (this.state === State.EXPECT_OPERAND) {
       const lastRealToken = this.tokens[this.tokens.length - 2];

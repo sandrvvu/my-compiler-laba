@@ -36,7 +36,7 @@ export class ArithmeticExpressionAnalyzer {
     const isValid = parser.parse();
     const syntacticErrors = parser.getErrors();
 
-    if (syntacticErrors.length > 0) {
+    if (!isValid && syntacticErrors.length > 0) {
       console.log("Синтаксичні помилки:");
       syntacticErrors.forEach((error, index) => {
         console.log(

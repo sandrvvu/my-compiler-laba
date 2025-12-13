@@ -1,7 +1,7 @@
 // main.ts
 import * as readline from 'readline';
 import { ArithmeticExpressionAnalyzer } from './analyzer';
-import { EquivalentExpressionGenerator, runLab3Interactive, runLab4Interactive } from './lab34';
+import { EquivalentExpressionGenerator, printVariants, runLab3Interactive, runLab4Interactive } from './lab34';
 import { ParallelExpressionAnalyzer, runLab2Interactive } from './lab2';
 
 const analyzer = new ArithmeticExpressionAnalyzer();
@@ -196,7 +196,7 @@ function runLab3(expressionArgs: string[]): void {
       const { original, variants } = equivalentsGenerator.generateCommutativeForms(expression);
       console.log(`\nПочаткова форма: ${original}`);
       console.log('Еквівалентні форми (комутативний закон):');
-      variants.forEach((variant, index) => console.log(`  ${index + 1}. ${variant}`));
+      printVariants(variants);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Невідома помилка';
       console.error(`Помилка: ${message}`);
@@ -221,7 +221,7 @@ function runLab4(expressionArgs: string[]): void {
       console.log(`\nПочаткова форма: ${original}`);
       console.log(`Після застосування дистрибутивності: ${distributed}`);
       console.log('Еквівалентні форми (дистрибутивний та комутативний закони):');
-      variants.forEach((variant, index) => console.log(`  ${index + 1}. ${variant}`));
+      printVariants(variants);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Невідома помилка';
       console.error(`Помилка: ${message}`);
