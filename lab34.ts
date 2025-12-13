@@ -26,6 +26,7 @@ export interface EquivalentFormsResult {
   original: string;
   distributed?: string;
   variants: string[];
+  truncated?: boolean;
 }
 
 export const VARIANT_DISPLAY_LIMIT = 50;
@@ -42,32 +43,47 @@ export function printVariants(variants: string[], limit: number = VARIANT_DISPLA
 }
 
 export class EquivalentExpressionGenerator {
-  public generateCommutativeForms(expression: string): EquivalentFormsResult {
+  public generateCommutativeForms(
+    expression: string,
+    options: { maxVariants?: number } = {}
+  ): EquivalentFormsResult {
+    const { maxVariants = Infinity } = options;
     const ast = this.parseExpression(this.tokenize(expression));
-    const variants = Array.from(this.generateCommutativeVariants(ast));
+    const { variants, truncated } = this.generateCommutativeVariants(ast, maxVariants);
 
     return {
       original: this.formatNode(ast),
       variants,
+      truncated,
     };
   }
 
-  public generateDistributiveForms(expression: string): EquivalentFormsResult {
+  public generateDistributiveForms(
+    expression: string,
+    options: { maxVariants?: number } = {}
+  ): EquivalentFormsResult {
+    const { maxVariants = Infinity } = options;
     const ast = this.parseExpression(this.tokenize(expression));
     const distributedAst = this.applyDistributiveLaw(this.cloneNode(ast));
     const distributed = this.formatNode(distributedAst);
+    const { variants: distributedVariants, truncated } = this.generateCommutativeVariants(
+      distributedAst,
+      maxVariants
+    );
+
     const variants = Array.from(
       new Set([
         this.formatNode(ast),
         distributed,
-        ...this.generateCommutativeVariants(distributedAst),
+        ...distributedVariants,
       ])
-    );
+    ).slice(0, maxVariants);
 
     return {
       original: this.formatNode(ast),
       distributed,
       variants,
+      truncated: truncated || variants.length >= maxVariants,
     };
   }
 
@@ -220,77 +236,113 @@ export class EquivalentExpressionGenerator {
     return `(${this.formatNode(node.left)} ${node.operator} ${this.formatNode(node.right)})`;
   }
 
-  private generateCommutativeVariants(node: ExpressionNode | undefined): Set<string> {
-    if (!node) return new Set();
-
-    if (node.type === 'OPERAND') {
-      return new Set([this.formatNode(node)]);
-    }
-
-    if (this.isAdditive(node)) {
-      const terms = this.flattenAdditive(node);
-      const termVariants = terms.map((term) => this.getMultiplicativeVariants(term.node));
-      const orderings = this.permute(Array.from(terms.keys()));
-      const results = new Set<string>();
-
-      orderings.forEach((order) => {
-        const assembled = this.buildAdditiveExpressions(order, terms, termVariants);
-        assembled.forEach((expr) => results.add(expr));
-      });
-
-      return results;
-    }
-
-    if (this.isPureMultiplication(node)) {
-      const factors = this.flattenMultiplication(node);
-      const orderings = this.permute(Array.from(factors.keys()));
-      const results = new Set<string>();
-
-      orderings.forEach((order) => {
-        const expression = order.map((index) => this.formatNode(factors[index])).join(' * ');
-        results.add(expression);
-      });
-
-      return results;
-    }
-
-    const leftVariants = this.generateCommutativeVariants(node.left);
-    const rightVariants = this.generateCommutativeVariants(node.right);
+  private generateCommutativeVariants(
+    node: ExpressionNode | undefined,
+    limit: number,
+  ): { variants: string[]; truncated: boolean } {
     const results = new Set<string>();
+    let truncated = false;
 
-    leftVariants.forEach((left) => {
-      rightVariants.forEach((right) => {
-        results.add(`(${left} ${node.operator} ${right})`);
-      });
-    });
+    const addVariant = (value: string): void => {
+      if (results.size < limit) {
+        results.add(value);
+      } else {
+        truncated = true;
+      }
+    };
 
-    return results;
+    const collectVariants = (current: ExpressionNode | undefined): void => {
+      if (!current || truncated) return;
+
+      if (current.type === 'OPERAND') {
+        addVariant(this.formatNode(current));
+        return;
+      }
+
+      if (this.isAdditive(current)) {
+        const terms = this.flattenAdditive(current);
+        const termVariants = terms.map((term) => this.getMultiplicativeVariants(term.node, limit));
+        const orderings = this.permute(Array.from(terms.keys()), limit);
+
+        for (const order of orderings) {
+          const assembled = this.buildAdditiveExpressions(order, terms, termVariants, limit - results.size);
+          assembled.forEach((expr) => addVariant(expr));
+          if (results.size >= limit) {
+            truncated = true;
+            break;
+          }
+        }
+        return;
+      }
+
+      if (this.isPureMultiplication(current)) {
+        const factors = this.flattenMultiplication(current);
+        const orderings = this.permute(Array.from(factors.keys()), limit);
+
+        for (const order of orderings) {
+          addVariant(order.map((index) => this.formatNode(factors[index])).join(' * '));
+          if (results.size >= limit) {
+            truncated = true;
+            break;
+          }
+        }
+        return;
+      }
+
+      const leftVariants = this.generateCommutativeVariants(current.left, limit - results.size);
+      const rightVariants = this.generateCommutativeVariants(current.right, limit - results.size);
+
+      for (const left of leftVariants.variants) {
+        for (const right of rightVariants.variants) {
+          addVariant(`(${left} ${current.operator} ${right})`);
+          if (results.size >= limit) {
+            truncated = true;
+            break;
+          }
+        }
+        if (results.size >= limit) {
+          break;
+        }
+      }
+
+      truncated ||= leftVariants.truncated || rightVariants.truncated;
+    };
+
+    collectVariants(node);
+    return { variants: Array.from(results), truncated };
   }
 
   private buildAdditiveExpressions(
     order: number[],
     terms: { node: ExpressionNode; sign: 1 | -1 }[],
-    termVariants: string[][]
+    termVariants: string[][],
+    limit: number,
   ): string[] {
     const results: string[] = [''];
 
-    order.forEach((termIndex, position) => {
+    for (let position = 0; position < order.length; position++) {
+      const termIndex = order[position];
       const sign = terms[termIndex].sign;
       const variants = termVariants[termIndex];
       const updated: string[] = [];
 
-      variants.forEach((variant) => {
+      for (const variant of variants) {
         const formatted = this.formatSignedTerm(variant, sign, position === 0);
-        results.forEach((partial) => {
+        for (const partial of results) {
+          if (updated.length >= limit) break;
           const combined = partial ? `${partial} ${formatted}`.trim() : formatted;
           updated.push(combined.trim());
-        });
-      });
+        }
+        if (updated.length >= limit) break;
+      }
 
-      results.splice(0, results.length, ...updated);
-    });
+      results.splice(0, results.length, ...updated.slice(0, limit));
+      if (results.length >= limit) {
+        break;
+      }
+    }
 
-    return results;
+    return results.slice(0, limit);
   }
 
   private formatSignedTerm(term: string, sign: 1 | -1, isFirst: boolean): string {
@@ -323,33 +375,39 @@ export class EquivalentExpressionGenerator {
     return [node];
   }
 
-  private getMultiplicativeVariants(node: ExpressionNode): string[] {
+  private getMultiplicativeVariants(node: ExpressionNode, limit: number): string[] {
     if (this.isPureMultiplication(node)) {
       const factors = this.flattenMultiplication(node);
-      const orderings = this.permute(Array.from(factors.keys()));
+      const orderings = this.permute(Array.from(factors.keys()), limit);
       const variants = new Set<string>();
 
-      orderings.forEach((order) => {
+      for (const order of orderings) {
+        if (variants.size >= limit) break;
         const expression = order.map((index) => this.formatNode(factors[index])).join(' * ');
         variants.add(expression);
-      });
+      }
 
-      return Array.from(variants);
+      return Array.from(variants).slice(0, limit);
     }
 
     return [this.formatNode(node)];
   }
 
-  private permute<T>(items: T[]): T[][] {
+  private permute<T>(items: T[], limit: number): T[][] {
     const results: T[][] = [];
 
     const backtrack = (path: T[], remaining: T[]): void => {
+      if (results.length >= limit) {
+        return;
+      }
+
       if (remaining.length === 0) {
         results.push(path);
         return;
       }
 
       remaining.forEach((item, index) => {
+        if (results.length >= limit) return;
         const nextRemaining = [...remaining.slice(0, index), ...remaining.slice(index + 1)];
         backtrack([...path, item], nextRemaining);
       });

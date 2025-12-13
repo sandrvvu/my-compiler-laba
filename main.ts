@@ -5,6 +5,7 @@ import { EquivalentExpressionGenerator, printVariants, runLab3Interactive, runLa
 import { ParallelExpressionAnalyzer, runLab2Interactive } from './lab2';
 import { StaticPipelineSimulator } from "./pipelineSimulator";
 import { renderParallelTree } from "./treeVisualizer";
+import { runLab6 } from "./lab6";
 
 const analyzer = new ArithmeticExpressionAnalyzer();
 const parallelAnalyzer = new ParallelExpressionAnalyzer();
@@ -113,12 +114,14 @@ function runTests(): void {
 }
 
 function parseLabChoice(args: string[]): {
-  lab: 1 | 2 | 3 | 4 | 5;
+  lab: 1 | 2 | 3 | 4 | 5 | 6;
   rest: string[];
   runTests: boolean;
+  maxVariants?: number;
 } {
-  let lab: 1 | 2 | 3 | 4 | 5 = 5;
+  let lab: 1 | 2 | 3 | 4 | 5 | 6 = 5;
   let runTests = false;
+  let maxVariants: number | undefined;
   const rest: string[] = [];
   let skipNext = false;
 
@@ -128,9 +131,9 @@ function parseLabChoice(args: string[]): {
       return;
     }
 
-    const match = arg.match(/^--lab=?([1-4])$/);
+    const match = arg.match(/^--lab=?([1-6])$/);
     if (match) {
-      lab = Number(match[1]) as 1 | 2 | 3 | 4;
+      lab = Number(match[1]) as 1 | 2 | 3 | 4 | 5 | 6;
       return;
     }
 
@@ -159,6 +162,11 @@ function parseLabChoice(args: string[]): {
       return;
     }
 
+    if (arg === "--lab6") {
+      lab = 6;
+      return;
+    }
+
     if ((arg === "--lab" || arg === "-l") && args[index + 1]) {
       const nextValue = Number(args[index + 1]);
       lab =
@@ -170,6 +178,8 @@ function parseLabChoice(args: string[]): {
           ? 4
           : nextValue === 5
           ? 5
+          : nextValue === 6
+          ? 6
           : 1;
       skipNext = true;
       return;
@@ -180,12 +190,24 @@ function parseLabChoice(args: string[]): {
       return;
     }
 
+    const limitMatch = arg.match(/^--limit=?([0-9]+)$/);
+    if (limitMatch) {
+      maxVariants = Number(limitMatch[1]);
+      return;
+    }
+
+    if ((arg === "--limit" || arg === "-n") && args[index + 1]) {
+      maxVariants = Number(args[index + 1]);
+      skipNext = true;
+      return;
+    }
+
     if (!arg.startsWith("--lab=")) {
       rest.push(arg);
     }
   });
 
-  return { lab, rest, runTests };
+  return { lab, rest, runTests, maxVariants };
 }
 
 function runLab2(expressionArgs: string[]): void {
@@ -239,8 +261,7 @@ function runLab3(expressionArgs: string[]): void {
 
   runLab3Interactive();
 }
-A
-function runLab4(expressionArgs: string[]): void {
+  function runLab4(expressionArgs: string[]): void {
   if (expressionArgs.length > 0) {
     const expression = expressionArgs.join(" ");
     try {
@@ -389,10 +410,15 @@ function runLab5(expressionArgs: string[]): void {
 
 function main(): void {
   const args = process.argv.slice(2);
-  const { lab, rest, runTests: shouldRunTests } = parseLabChoice(args);
+  const { lab, rest, runTests: shouldRunTests, maxVariants } = parseLabChoice(args);
 
   if (lab === 5) {
     runLab5(rest);
+    return;
+  }
+
+  if (lab === 6) {
+    runLab6(rest, maxVariants);
     return;
   }
 
