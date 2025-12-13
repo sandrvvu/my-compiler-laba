@@ -1,7 +1,8 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import { ArithmeticExpressionAnalyzer } from './analyzer';
-import { ParallelExpressionAnalyzer, ParallelNode } from './lab2';
+import * as fs from "fs";
+import * as path from "path";
+import { ParallelExpressionAnalyzer, ParallelNode } from "./lab2";
+import { Lexer } from "./lexer";
+import { Parser } from "./parser";
 
 type OperatorSymbol = '+' | '-' | '*' | '/';
 
@@ -32,13 +33,16 @@ export interface PipelineSimulationResult {
   parallelTime: number;
   speedup: number;
   efficiency: number;
+  usedProcessors: number;
+  peakConcurrency: number;
   gantt: string[];
   ganttSvg: string;
   ganttFile: string;
+  latestGanttFile: string;
+  executionLog: string[];
 }
 
 export class StaticPipelineSimulator {
-  private readonly validator = new ArithmeticExpressionAnalyzer();
   private readonly parallelAnalyzer = new ParallelExpressionAnalyzer();
 
   constructor(private readonly config: PipelineConfig = StaticPipelineSimulator.defaultConfig) {}
@@ -51,20 +55,18 @@ export class StaticPipelineSimulator {
   }
 
   public simulate(expression: string): PipelineSimulationResult {
-    const validation = this.validator.analyze(expression);
-    if (!validation.isValid) {
-      throw new Error('Вираз містить помилки. Неможливо побудувати конвеєрну модель.');
-    }
+    this.validateExpression(expression);
 
     const tree = this.parallelAnalyzer.buildTree(expression);
     const tasks = this.collectTasks(tree);
     const sequentialTime = tasks.reduce((sum, task) => sum + this.config.operationTimes[task.operator], 0);
-    const schedule = this.buildSchedule(tasks);
+    const { schedule, executionLog } = this.buildScheduleWithLogging(tasks);
     const parallelTime = schedule.reduce((max, item) => Math.max(max, item.finish), 0);
+    const { usedProcessors, peakConcurrency } = this.computeConcurrency(schedule);
     const speedup = parallelTime === 0 ? 0 : sequentialTime / parallelTime;
     const efficiency = this.config.processors === 0 ? 0 : speedup / this.config.processors;
     const ganttSvg = this.renderGanttSvg(schedule);
-    const ganttFile = this.persistGanttFile(ganttSvg);
+    const { archivedPath: ganttFile, latestPath: latestGanttFile } = this.persistGanttFile(ganttSvg);
 
     return {
       tree,
@@ -74,10 +76,36 @@ export class StaticPipelineSimulator {
       parallelTime,
       speedup,
       efficiency,
+      usedProcessors,
+      peakConcurrency,
       gantt: this.renderGantt(schedule),
       ganttSvg,
       ganttFile,
+      latestGanttFile,
+      executionLog,
     };
+  }
+
+  private computeConcurrency(schedule: ScheduledOperation[]): { usedProcessors: number; peakConcurrency: number } {
+    const usedProcessors = new Set(schedule.map((item) => item.processor)).size;
+    const events: Array<{ time: number; delta: number }> = [];
+
+    schedule.forEach((item) => {
+      events.push({ time: item.start, delta: 1 });
+      events.push({ time: item.finish, delta: -1 });
+    });
+
+    events.sort((a, b) => a.time - b.time || a.delta - b.delta);
+
+    let active = 0;
+    let peakConcurrency = 0;
+
+    events.forEach((event) => {
+      active += event.delta;
+      peakConcurrency = Math.max(peakConcurrency, active);
+    });
+
+    return { usedProcessors, peakConcurrency };
   }
 
   private collectTasks(node: ParallelNode): OperationTask[] {
@@ -106,42 +134,175 @@ export class StaticPipelineSimulator {
     return tasks;
   }
 
-  private buildSchedule(tasks: OperationTask[]): ScheduledOperation[] {
+  private buildScheduleWithLogging(tasks: OperationTask[]): { 
+    schedule: ScheduledOperation[]; 
+    executionLog: string[] 
+  } {
     const processorReady: number[] = Array(this.config.processors).fill(0);
     const completion = new Map<string, number>();
     const schedule: ScheduledOperation[] = [];
+    const executionLog: string[] = [];
+
+    const remainingDeps = new Map<string, number>();
+    const dependents = new Map<string, string[]>();
+    const taskById = new Map(tasks.map((task) => [task.id, task]));
 
     tasks.forEach((task) => {
-      const readyTime = task.dependencies.length
-        ? Math.max(...task.dependencies.map((dep) => completion.get(dep) ?? 0))
-        : 0;
-
-      const { processorIndex, startTime } = this.findEarliestSlot(processorReady, readyTime);
-      const duration = this.config.operationTimes[task.operator];
-      const finish = startTime + duration;
-
-      processorReady[processorIndex] = finish;
-      completion.set(task.id, finish);
-
-      schedule.push({ ...task, processor: processorIndex, start: startTime, finish, duration });
+      remainingDeps.set(task.id, task.dependencies.length);
+      task.dependencies.forEach((dep) => {
+        const list = dependents.get(dep) ?? [];
+        list.push(task.id);
+        dependents.set(dep, list);
+      });
     });
 
-    return schedule.sort((a, b) => a.start - b.start || a.processor - b.processor);
+    const ready: Array<{ task: OperationTask; readyTime: number }> = tasks
+      .filter((task) => task.dependencies.length === 0)
+      .map((task) => ({ task, readyTime: 0 }));
+
+    executionLog.push('=== ПОЧАТОК СИМУЛЯЦІЇ КОНВЕЄРА ===\n');
+    executionLog.push(`Загальна кількість операцій: ${tasks.length}`);
+    executionLog.push(`Операції без залежностей (готові): ${ready.length}`);
+    executionLog.push(`Доступно процесорів: ${this.config.processors}\n`);
+
+    let currentTime = 0;
+    let cycleCount = 0;
+    const MAX_CYCLES = tasks.length * 1000;
+
+    while (schedule.length < tasks.length && cycleCount < MAX_CYCLES) {
+      cycleCount++;
+      
+      ready.sort((a, b) => {
+        if (a.readyTime !== b.readyTime) return a.readyTime - b.readyTime;
+        const durA = this.config.operationTimes[a.task.operator];
+        const durB = this.config.operationTimes[b.task.operator];
+        return durB - durA;
+      });
+
+      const readyNow = ready.filter(r => r.readyTime <= currentTime);
+      
+      if (readyNow.length === 0) {
+        const nextProcessorFree = Math.min(...processorReady.filter(t => t > currentTime));
+        const nextTaskReady = ready.length > 0 ? Math.min(...ready.map(r => r.readyTime)) : Infinity;
+        const nextTime = Math.min(nextProcessorFree, nextTaskReady);
+        
+        if (nextTime === Infinity || nextTime <= currentTime) {
+          executionLog.push(`\nПОМИЛКА: Не вдається знайти наступний такт`);
+          executionLog.push(`  Поточний час: ${currentTime}`);
+          executionLog.push(`  Залишилось задач: ${tasks.length - schedule.length}`);
+          executionLog.push(`  Готових задач: ${ready.length}`);
+          executionLog.push(`  Стан процесорів: [${processorReady.join(', ')}]`);
+          break;
+        }
+        
+        currentTime = nextTime;
+        continue;
+      }
+
+      executionLog.push(`\n--- ТАКТ ${currentTime} (ітерація ${cycleCount}) ---`);
+      executionLog.push(`Стан процесорів: [${processorReady.map((t, i) => `P${i+1}:${t}`).join(', ')}]`);
+      executionLog.push(`Готових задач на цьому такті: ${readyNow.length}/${ready.length}`);
+
+      let scheduledInThisCycle = 0;
+
+      for (let procIdx = 0; procIdx < this.config.processors; procIdx++) {
+        if (processorReady[procIdx] > currentTime) continue;
+
+        const readyIndex = ready.findIndex((item) => item.readyTime <= currentTime);
+        if (readyIndex === -1) break;
+
+        const { task } = ready.splice(readyIndex, 1)[0];
+        const start = currentTime;
+        const duration = this.config.operationTimes[task.operator];
+        const finish = start + duration;
+
+        processorReady[procIdx] = finish;
+        completion.set(task.id, finish);
+        
+        const scheduledOp: ScheduledOperation = { 
+          ...task, 
+          processor: procIdx, 
+          start, 
+          finish, 
+          duration 
+        };
+        
+        schedule.push(scheduledOp);
+        scheduledInThisCycle++;
+
+        const depsStr = task.dependencies.length > 0 
+          ? task.dependencies.map(d => d.slice(0, 6)).join(', ') 
+          : 'немає';
+        
+        executionLog.push(
+          `  P${procIdx + 1}: запущено ${task.label} ` +
+          `(${task.operator}, тривалість=${duration}, ${start} -> ${finish}) ` +
+          `[залежності: ${depsStr}]`
+        );
+
+        const dependentsList = dependents.get(task.id) ?? [];
+        dependentsList.forEach((dependentId) => {
+          const remaining = (remainingDeps.get(dependentId) ?? 1) - 1;
+          remainingDeps.set(dependentId, remaining);
+
+          if (remaining === 0) {
+            const dependentTask = taskById.get(dependentId);
+            if (dependentTask) {
+              const depFinishTimes = dependentTask.dependencies
+                .map(depId => completion.get(depId) ?? 0);
+              const readyAt = depFinishTimes.length > 0 ? Math.max(...depFinishTimes) : finish;
+              
+              ready.push({ task: dependentTask, readyTime: readyAt });
+              executionLog.push(
+                `    -> ${dependentTask.label} розблокована (готова з такту ${readyAt})`
+              );
+            }
+          }
+        });
+      }
+
+      executionLog.push(`  Заплановано операцій у цьому такті: ${scheduledInThisCycle}`);
+      
+      if (schedule.length < tasks.length) {
+        const nextProcessorFree = Math.min(...processorReady.filter(t => t > currentTime));
+        const nextTaskReady = ready.length > 0 ? Math.min(...ready.map(r => r.readyTime)) : Infinity;
+        const nextTime = Math.min(nextProcessorFree, nextTaskReady);
+        
+        if (nextTime > currentTime && nextTime !== Infinity) {
+          currentTime = nextTime;
+        }
+      }
+    }
+
+    if (cycleCount >= MAX_CYCLES) {
+      executionLog.push('\nПОПЕРЕДЖЕННЯ: Досягнуто ліміт ітерацій!');
+    }
+
+    executionLog.push('\n=== ЗАВЕРШЕННЯ СИМУЛЯЦІЇ ===');
+    executionLog.push(`Всього ітерацій: ${cycleCount}`);
+    executionLog.push(`Всього операцій виконано: ${schedule.length}/${tasks.length}`);
+
+    return { 
+      schedule: schedule.sort((a, b) => a.start - b.start || a.processor - b.processor),
+      executionLog 
+    };
   }
 
-  private findEarliestSlot(readyTimes: number[], readyFrom: number): { processorIndex: number; startTime: number } {
-    let bestProcessor = 0;
-    let bestStart = Number.POSITIVE_INFINITY;
+  private validateExpression(expression: string): void {
+    const lexer = new Lexer(expression);
+    const tokens = lexer.tokenize();
+    const lexicalErrors = lexer.getErrors();
 
-    readyTimes.forEach((availableAt, index) => {
-      const startTime = Math.max(availableAt, readyFrom);
-      if (startTime < bestStart || (startTime === bestStart && index < bestProcessor)) {
-        bestProcessor = index;
-        bestStart = startTime;
-      }
-    });
+    const parser = new Parser(tokens);
+    parser.parse();
+    const syntacticErrors = parser.getErrors();
 
-    return { processorIndex: bestProcessor, startTime: bestStart };
+    if (lexicalErrors.length || syntacticErrors.length) {
+      const message = [...lexicalErrors, ...syntacticErrors]
+        .map((error) => `${error.message} (позиція: ${error.position})`)
+        .join('; ');
+      throw new Error(`Вираз містить помилки: ${message || 'невідома помилка'}`);
+    }
   }
 
   private renderGantt(schedule: ScheduledOperation[]): string[] {
@@ -150,63 +311,73 @@ export class StaticPipelineSimulator {
     for (let i = 0; i < this.config.processors; i++) {
       const tasks = schedule
         .filter((item) => item.processor === i)
-        .sort((a, b) => a.start - b.start || a.finish - b.finish);
+        .sort((a, b) => a.start - b.start);
 
       const segments = tasks.map((task) => `[${task.start}-${task.finish} ${task.label}]`);
-      lines.push(`P${i + 1}: ${segments.join(' ')}`.trim());
+      lines.push(`P${i + 1}: ${segments.length ? segments.join(' ') : '—'}`);
     }
 
     return lines;
   }
 
   private renderGanttSvg(schedule: ScheduledOperation[]): string {
-    const rowHeight = 40;
-    const padding = 24;
-    const labelWidth = 80;
+    const rowHeight = 52;
+    const paddingTop = 56;
+    const paddingSide = 32;
+    const paddingBottom = 44;
+    const labelWidth = 88;
     const timelineHeight = this.config.processors * rowHeight;
     const totalTime = schedule.reduce((max, item) => Math.max(max, item.finish), 0);
-    const scale = 60; // pixels per time unit
-    const width = labelWidth + padding * 2 + totalTime * scale;
-    const height = timelineHeight + padding * 2 + 30;
+    const scale = 56;
+    const width = labelWidth + paddingSide * 2 + totalTime * scale + 48;
+    const height = timelineHeight + paddingTop + paddingBottom + 28;
 
     const rects = schedule
       .map((task) => {
-        const x = labelWidth + padding + task.start * scale;
-        const y = padding + task.processor * rowHeight;
-        const rectWidth = Math.max(20, task.duration * scale);
-        const rectHeight = rowHeight - 10;
+        const x = labelWidth + paddingSide + task.start * scale;
+        const y = paddingTop + task.processor * rowHeight + 6;
+        const rectWidth = Math.max(38, task.duration * scale - 10);
+        const rectHeight = rowHeight - 16;
         const label = `${task.label} (${task.start}-${task.finish})`;
+        const maxChars = Math.floor((rectWidth - 16) / 7);
+        const visibleLabel = label.length > maxChars ? `${label.slice(0, Math.max(0, maxChars - 1))}…` : label;
         return `\n      <g>` +
-          `\n        <rect x="${x}" y="${y}" width="${rectWidth}" height="${rectHeight}" rx="6" ry="6" fill="#4F46E5" opacity="0.85" />` +
-          `\n        <text x="${x + 6}" y="${y + rectHeight / 2 + 4}" fill="white" font-size="12" font-family="'Segoe UI', sans-serif">${label}</text>` +
+          `\n        <rect x="${x}" y="${y}" width="${rectWidth}" height="${rectHeight}" rx="10" ry="10" fill="#4F46E5" stroke="#312E81" stroke-width="1.5" opacity="0.9" />` +
+          `\n        <text x="${x + 10}" y="${y + rectHeight / 2}" fill="#F9FAFB" font-size="12" font-family="'Segoe UI', sans-serif" font-weight="600" text-anchor="start">${visibleLabel}</text>` +
           `\n      </g>`;
       })
       .join('');
 
     const lanes = Array.from({ length: this.config.processors }).map((_, i) => {
-      const y = padding + i * rowHeight + rowHeight / 2;
-      return `\n      <text x="${padding}" y="${y + 4}" font-size="14" font-family="'Segoe UI', sans-serif" fill="#111827">P${i + 1}</text>` +
-        `\n      <line x1="${labelWidth + padding}" y1="${y}" x2="${width - padding}" y2="${y}" stroke="#D1D5DB" stroke-width="1" stroke-dasharray="4 4" />`;
+      const y = paddingTop + i * rowHeight + rowHeight / 2;
+      const bandTop = paddingTop + i * rowHeight + 2;
+      const bandHeight = rowHeight - 8;
+      return `\n      <g>` +
+        `\n        <rect x="${labelWidth + paddingSide}" y="${bandTop}" width="${width - labelWidth - paddingSide * 2}" height="${bandHeight}" fill="${i % 2 === 0 ? '#EEF2FF' : '#E0E7FF'}" rx="8" ry="8" />` +
+        `\n        <text x="${paddingSide}" y="${y}" font-size="14" font-family="'Segoe UI', sans-serif" fill="#111827" font-weight="600">P${i + 1}</text>` +
+        `\n        <line x1="${labelWidth + paddingSide}" y1="${y}" x2="${width - paddingSide - 8}" y2="${y}" stroke="#C7D2FE" stroke-width="1" stroke-dasharray="6 6" />` +
+        `\n      </g>`;
     }).join('');
 
     const ticks = Array.from({ length: totalTime + 1 }).map((_, t) => {
-      const x = labelWidth + padding + t * scale;
-      return `\n      <line x1="${x}" y1="${padding - 6}" x2="${x}" y2="${height - padding}" stroke="#9CA3AF" stroke-width="1" />` +
-        `\n      <text x="${x}" y="${padding - 10}" font-size="12" font-family="'Segoe UI', sans-serif" fill="#111827" text-anchor="middle">${t}</text>`;
+      const x = labelWidth + paddingSide + t * scale;
+      return `\n      <g>` +
+        `\n        <line x1="${x}" y1="${paddingTop - 18}" x2="${x}" y2="${height - paddingBottom + 6}" stroke="#9CA3AF" stroke-width="1" />` +
+        `\n        <text x="${x}" y="${paddingTop - 26}" font-size="12" font-family="'Segoe UI', sans-serif" fill="#111827" text-anchor="middle">${t}</text>` +
+        `\n      </g>`;
     }).join('');
 
     return `<?xml version="1.0" encoding="UTF-8"?>\n` +
-      `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" role="img" aria-label="Gantt chart">\n` +
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="Gantt chart">\n` +
       `  <style>text{dominant-baseline:middle;}</style>\n` +
       `  <rect x="0" y="0" width="100%" height="100%" fill="#F9FAFB" stroke="#E5E7EB" />\n` +
-      `  <text x="${padding}" y="${padding / 2}" font-size="16" font-family="'Segoe UI', sans-serif" fill="#111827" font-weight="600">Діаграма Ганта конвеєра</text>` +
       `  ${ticks}` +
       `  ${lanes}` +
       `  ${rects}\n` +
       `</svg>`;
   }
 
-  private persistGanttFile(svg: string): string {
+  private persistGanttFile(svg: string): { archivedPath: string; latestPath: string } {
     const outputDir = path.resolve(process.cwd(), 'outputs');
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir);
@@ -215,7 +386,9 @@ export class StaticPipelineSimulator {
     const filename = `gantt-${Date.now()}.svg`;
     const filepath = path.join(outputDir, filename);
     fs.writeFileSync(filepath, svg, 'utf-8');
-    return filepath;
+    const latestPath = path.join(outputDir, 'gantt-latest.svg');
+    fs.writeFileSync(latestPath, svg, 'utf-8');
+    return { archivedPath: filepath, latestPath };
   }
 
   private static get defaultConfig(): PipelineConfig {
