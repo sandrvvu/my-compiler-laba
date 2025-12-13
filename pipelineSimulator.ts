@@ -1,6 +1,10 @@
 import * as fs from "fs";
 import * as path from "path";
-import { ParallelExpressionAnalyzer, ParallelNode } from "./lab2";
+import {
+  OptimizationRecord,
+  ParallelExpressionAnalyzer,
+  ParallelNode,
+} from "./lab2";
 import { Lexer } from "./lexer";
 import { Parser } from "./parser";
 
@@ -26,7 +30,11 @@ export interface PipelineConfig {
 }
 
 export interface PipelineSimulationResult {
+  originalExpression: string;
+  optimizedExpression: string;
+  originalTree: ParallelNode;
   tree: ParallelNode;
+  optimizations: OptimizationRecord[];
   tasks: OperationTask[];
   schedule: ScheduledOperation[];
   sequentialTime: number;
@@ -57,7 +65,12 @@ export class StaticPipelineSimulator {
   public simulate(expression: string): PipelineSimulationResult {
     this.validateExpression(expression);
 
-    const tree = this.parallelAnalyzer.buildTree(expression);
+    const {
+      originalTree,
+      optimizedTree: tree,
+      optimizations,
+      optimizedExpression,
+    } = this.parallelAnalyzer.analyzeForPipeline(expression);
     const tasks = this.collectTasks(tree);
     const sequentialTime = tasks.reduce((sum, task) => sum + this.config.operationTimes[task.operator], 0);
     const { schedule, executionLog } = this.buildScheduleWithLogging(tasks);
@@ -69,7 +82,11 @@ export class StaticPipelineSimulator {
     const { archivedPath: ganttFile, latestPath: latestGanttFile } = this.persistGanttFile(ganttSvg);
 
     return {
+      originalExpression: expression,
+      optimizedExpression,
+      originalTree,
       tree,
+      optimizations,
       tasks,
       schedule,
       sequentialTime,

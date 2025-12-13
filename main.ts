@@ -8,6 +8,7 @@ import {
 } from "./lab34";
 import { ParallelExpressionAnalyzer, runLab2Interactive } from "./lab2";
 import { StaticPipelineSimulator } from "./pipelineSimulator";
+import { renderParallelTree } from "./treeVisualizer";
 
 const analyzer = new ArithmeticExpressionAnalyzer();
 const parallelAnalyzer = new ParallelExpressionAnalyzer();
@@ -293,6 +294,24 @@ function printPipelineResult(expression: string): void {
         .map(([op, t]) => `${op}=${t}`)
         .join(", ")
   );
+
+  console.log("\n=== ПІДГОТОВКА ВИРАЗУ (лаба 2) ===");
+  console.log(`Початковий вираз: ${result.originalExpression}`);
+  if (result.optimizations.length === 0) {
+    console.log("Оптимізації не виконувалися (використовується вихідне дерево).");
+  } else {
+    console.log(`Виконано оптимізацій: ${result.optimizations.length}`);
+    result.optimizations.forEach((item, index) => {
+      const label = item.type === "subtraction" ? "Ланцюг віднімання" : "Ланцюг ділення";
+      console.log(`  ${index + 1}. ${label}: ${item.original} → ${item.optimized}`);
+    });
+  }
+  console.log(`Вираз після оптимізацій: ${result.optimizedExpression}`);
+
+  console.log("\nДерево (оригінальне):");
+  console.log(renderParallelTree(result.originalTree));
+  console.log("\nДерево після оптимізацій (використовується в конвеєрі):");
+  console.log(renderParallelTree(result.tree));
 
   console.log("\n=== ДЕТАЛЬНИЙ ЛОГ ВИКОНАННЯ ===");
   result.executionLog.forEach((line) => console.log(line));
