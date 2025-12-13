@@ -31,8 +31,12 @@ export class ParallelFormOptimizer {
 
   public analyze(expression: string, maxVariants: number = DEFAULT_VARIANT_LIMIT): OptimizationResult {
     const limit = Math.max(1, maxVariants);
-    const generation = this.generator.generateDistributiveForms(expression, { maxVariants: limit });
-    const uniqueVariants = Array.from(new Set([expression, ...generation.variants]));
+    const commutative = this.generator.generateCommutativeForms(expression, { maxVariants: limit });
+    const distributive = this.generator.generateDistributiveForms(expression, { maxVariants: limit });
+
+    const uniqueVariants = Array.from(
+      new Set([expression, ...commutative.variants, ...distributive.variants])
+    );
     const limitedVariants = uniqueVariants.slice(0, limit);
 
     const evaluations = limitedVariants.map((variant) => {
@@ -52,7 +56,10 @@ export class ParallelFormOptimizer {
       config: this.simulator.configuration,
       totalVariants: uniqueVariants.length,
       evaluatedVariants: limitedVariants.length,
-      truncated: generation.truncated || uniqueVariants.length > limitedVariants.length,
+      truncated:
+        commutative.truncated ||
+        distributive.truncated ||
+        uniqueVariants.length > limitedVariants.length,
       evaluations,
     };
   }
