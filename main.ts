@@ -3,6 +3,7 @@ import * as readline from 'readline';
 import { ArithmeticExpressionAnalyzer } from './analyzer';
 import { EquivalentExpressionGenerator, printVariants, runLab3Interactive, runLab4Interactive } from './lab34';
 import { ParallelExpressionAnalyzer, runLab2Interactive } from './lab2';
+import { runLab6 } from './lab6';
 import { StaticPipelineSimulator } from "./pipelineSimulator";
 import { renderParallelTree } from "./treeVisualizer";
 
@@ -113,11 +114,11 @@ function runTests(): void {
 }
 
 function parseLabChoice(args: string[]): {
-  lab: 1 | 2 | 3 | 4 | 5;
+  lab: 1 | 2 | 3 | 4 | 5 | 6;
   rest: string[];
   runTests: boolean;
 } {
-  let lab: 1 | 2 | 3 | 4 | 5 = 5;
+  let lab: 1 | 2 | 3 | 4 | 5 | 6 = 5;
   let runTests = false;
   const rest: string[] = [];
   let skipNext = false;
@@ -128,9 +129,9 @@ function parseLabChoice(args: string[]): {
       return;
     }
 
-    const match = arg.match(/^--lab=?([1-4])$/);
+    const match = arg.match(/^--lab=?([1-6])$/);
     if (match) {
-      lab = Number(match[1]) as 1 | 2 | 3 | 4;
+      lab = Number(match[1]) as 1 | 2 | 3 | 4 | 5 | 6;
       return;
     }
 
@@ -159,6 +160,11 @@ function parseLabChoice(args: string[]): {
       return;
     }
 
+    if (arg === "--lab6") {
+      lab = 6;
+      return;
+    }
+
     if ((arg === "--lab" || arg === "-l") && args[index + 1]) {
       const nextValue = Number(args[index + 1]);
       lab =
@@ -170,6 +176,8 @@ function parseLabChoice(args: string[]): {
           ? 4
           : nextValue === 5
           ? 5
+          : nextValue === 6
+          ? 6
           : 1;
       skipNext = true;
       return;
@@ -239,7 +247,7 @@ function runLab3(expressionArgs: string[]): void {
 
   runLab3Interactive();
 }
-A
+
 function runLab4(expressionArgs: string[]): void {
   if (expressionArgs.length > 0) {
     const expression = expressionArgs.join(" ");
@@ -390,6 +398,11 @@ function runLab5(expressionArgs: string[]): void {
 function main(): void {
   const args = process.argv.slice(2);
   const { lab, rest, runTests: shouldRunTests } = parseLabChoice(args);
+
+  if (lab === 6) {
+    runLab6(rest);
+    return;
+  }
 
   if (lab === 5) {
     runLab5(rest);

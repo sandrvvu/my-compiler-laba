@@ -13,6 +13,7 @@
     "lab3": "npm run build && node dist/main.js --lab 3",
     "lab4": "npm run build && node dist/main.js --lab 4",
     "lab5": "npm run build && node dist/main.js --lab 5",
+    "lab6": "npm run build && node dist/main.js --lab 6",
     "clean": "rm -rf dist"
   },
   "keywords": [
