@@ -41,6 +41,13 @@ interface Token {
 }
 
 export class ParallelExpressionAnalyzer {
+  public buildTree(expression: string): ParallelNode {
+    const tokens = this.tokenize(expression);
+    const parsed = this.parseExpression(tokens);
+    const { tree } = this.optimizeTree(this.cloneNode(parsed));
+    return tree;
+  }
+
   public analyze(expression: string): ParallelAnalysisResult {
     console.log(`\n=== Лабораторна робота №2: розпаралелювання виразу "${expression}" ===`);
     const tokens = this.tokenize(expression);

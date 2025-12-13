@@ -3,10 +3,12 @@ import * as readline from 'readline';
 import { ArithmeticExpressionAnalyzer } from './analyzer';
 import { EquivalentExpressionGenerator, runLab3Interactive, runLab4Interactive } from './lab34';
 import { ParallelExpressionAnalyzer, runLab2Interactive } from './lab2';
+import { StaticPipelineSimulator } from './pipelineSimulator';
 
 const analyzer = new ArithmeticExpressionAnalyzer();
 const parallelAnalyzer = new ParallelExpressionAnalyzer();
 const equivalentsGenerator = new EquivalentExpressionGenerator();
+const pipelineSimulator = new StaticPipelineSimulator();
 
 const testExpressions = [
   // Правильні вирази
@@ -104,8 +106,8 @@ function runTests(): void {
   analyzer.analyzeMultiple(testExpressions);
 }
 
-function parseLabChoice(args: string[]): { lab: 1 | 2 | 3 | 4; rest: string[]; runTests: boolean } {
-  let lab: 1 | 2 | 3 | 4 = 1;
+function parseLabChoice(args: string[]): { lab: 1 | 2 | 3 | 4 | 5; rest: string[]; runTests: boolean } {
+  let lab: 1 | 2 | 3 | 4 | 5 = 1;
   let runTests = false;
   const rest: string[] = [];
   let skipNext = false;
@@ -142,9 +144,14 @@ function parseLabChoice(args: string[]): { lab: 1 | 2 | 3 | 4; rest: string[]; r
       return;
     }
 
+    if (arg === '--lab5') {
+      lab = 5;
+      return;
+    }
+
     if ((arg === '--lab' || arg === '-l') && args[index + 1]) {
       const nextValue = Number(args[index + 1]);
-      lab = nextValue === 2 ? 2 : nextValue === 3 ? 3 : nextValue === 4 ? 4 : 1;
+      lab = nextValue === 2 ? 2 : nextValue === 3 ? 3 : nextValue === 4 ? 4 : nextValue === 5 ? 5 : 1;
       skipNext = true;
       return;
     }
@@ -232,10 +239,84 @@ function runLab4(expressionArgs: string[]): void {
   runLab4Interactive();
 }
 
+function printPipelineResult(expression: string): void {
+  const result = pipelineSimulator.simulate(expression);
+  const config = pipelineSimulator.configuration;
+
+  console.log('\n=== Лабораторна робота №5: статичний конвеєр ===');
+  console.log(`Тип системи: статичний конвеєр, процесорів (шарів): ${config.processors}`);
+  console.log('Тривалості операцій (такти):');
+  Object.entries(config.operationTimes).forEach(([op, time]) => {
+    console.log(`  ${op}: ${time}`);
+  });
+
+  console.log(`\nЧас послідовного виконання: ${result.sequentialTime} такт(ів)`);
+  console.log(`Час виконання АВ (конвеєр): ${result.parallelTime} такт(ів)`);
+  console.log(`Коефіцієнт прискорення: ${result.speedup.toFixed(2)}`);
+  console.log(`Ефективність: ${(result.efficiency * 100).toFixed(2)}%`);
+
+  console.log('\nДіаграма Ганта:');
+  console.log(`  Збережено у файлі: ${result.ganttFile}`);
+
+  console.log('\nРозклад операцій:');
+  result.schedule.forEach((item, index) => {
+    const deps = item.dependencies.length ? item.dependencies.map((d) => d.slice(0, 4)).join(', ') : '—';
+    console.log(
+      `  ${index + 1}. P${item.processor + 1} | ${item.label} | старт ${item.start}, фініш ${item.finish}, t=${item.duration}, залежності: ${deps}`
+    );
+  });
+}
+
+function runLab5(expressionArgs: string[]): void {
+  if (expressionArgs.length > 0) {
+    const expression = expressionArgs.join(' ');
+    try {
+      analyzer.analyze(expression);
+      printPipelineResult(expression);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Невідома помилка';
+      console.error(`Помилка: ${message}`);
+    }
+    return;
+  }
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  const ask = (): void => {
+    rl.question('\nВведіть вираз для моделювання конвеєра (або quit для виходу): ', (expression: string) => {
+      if (expression.toLowerCase() === 'quit' || expression.toLowerCase() === 'exit') {
+        console.log('Завершення роботи лабораторної №5.');
+        rl.close();
+        return;
+      }
+
+      try {
+        analyzer.analyze(expression);
+        printPipelineResult(expression);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Невідома помилка';
+        console.error(`Помилка: ${message}`);
+      }
+
+      ask();
+    });
+  };
+
+  ask();
+}
+
 
 function main(): void {
   const args = process.argv.slice(2);
   const { lab, rest, runTests: shouldRunTests } = parseLabChoice(args);
+
+  if (lab === 5) {
+    runLab5(rest);
+    return;
+  }
 
   if (lab === 2) {
     runLab2(rest);
