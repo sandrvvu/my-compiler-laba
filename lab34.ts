@@ -172,6 +172,23 @@ export class EquivalentExpressionGenerator {
     };
 
     const parseUnary = (): ExpressionNode => {
+      if (!isEnd() && peek()?.type === 'OPERATOR' && ['+', '-'].includes(peek().value)) {
+        const op = consume();
+        const operand = parseUnary();
+
+        if (op.value === '+') {
+          return operand;
+        }
+
+        return {
+          type: 'BINARY_OP',
+          operator: '-',
+          left: { type: 'OPERAND', value: '0', id: randomUUID() },
+          right: operand,
+          id: randomUUID(),
+        };
+      }
+
       return parsePrimary();
     };
 
@@ -347,9 +364,9 @@ export class EquivalentExpressionGenerator {
 
   private formatSignedTerm(term: string, sign: 1 | -1, isFirst: boolean): string {
     if (isFirst) {
-      return sign === -1 ? `-${term}` : term;
+      return sign === -1 ? `-(${term})` : term;
     }
-    return sign === -1 ? `- ${term}` : `+ ${term}`;
+    return sign === -1 ? `- (${term})` : `+ ${term}`;
   }
 
   private flattenAdditive(node: ExpressionNode | undefined, sign: 1 | -1 = 1): { node: ExpressionNode; sign: 1 | -1 }[] {

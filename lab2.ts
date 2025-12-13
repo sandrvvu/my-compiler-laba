@@ -168,6 +168,23 @@ export class ParallelExpressionAnalyzer {
     };
 
     const parseUnary = (): ParallelNode => {
+      if (!isEnd() && peek()?.type === 'OPERATOR' && ['+', '-'].includes(peek().value)) {
+        const op = consume();
+        const operand = parseUnary();
+
+        if (op.value === '+') {
+          return operand;
+        }
+
+        return {
+          type: 'BINARY_OP',
+          operator: '-',
+          left: { type: 'OPERAND', value: '0', id: randomUUID() },
+          right: operand,
+          id: randomUUID(),
+        };
+      }
+
       return parsePrimary();
     };
 
