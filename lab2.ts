@@ -41,14 +41,37 @@ interface Token {
 }
 
 export class ParallelExpressionAnalyzer {
+  public analyzeForPipeline(expression: string): {
+    originalTree: ParallelNode;
+    optimizedTree: ParallelNode;
+    optimizations: OptimizationRecord[];
+    optimizedExpression: string;
+  } {
+    const tokens = this.tokenize(expression);
+    const ast = this.parseExpression(tokens);
+    const originalTree = this.cloneNode(ast);
+    const { tree: optimizedTree, log: optimizations } = this.optimizeTree(ast);
+
+    return {
+      originalTree,
+      optimizedTree,
+      optimizations,
+      optimizedExpression: this.formatNode(optimizedTree),
+    };
+  }
+
+  public buildTree(expression: string): ParallelNode {
+    const { optimizedTree } = this.analyzeForPipeline(expression);
+    return optimizedTree;
+  }
+
   public analyze(expression: string): ParallelAnalysisResult {
     console.log(`\n=== Лабораторна робота №2: розпаралелювання виразу "${expression}" ===`);
     const tokens = this.tokenize(expression);
     console.log('\nТокени:', tokens.map((t) => t.value).join(' '));
 
-    const ast = this.parseExpression(tokens);
-    const originalTree = this.cloneNode(ast);
-    const { tree, log } = this.optimizeTree(ast);
+    const { originalTree, optimizedTree: tree, optimizations: log } =
+      this.analyzeForPipeline(expression);
     const stats = this.calculateTreeLevels(tree);
 
     this.printTree('Початкове дерево', originalTree);
